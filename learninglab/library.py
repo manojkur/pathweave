@@ -1,6 +1,7 @@
 """Optional private library adapter. Git carries references, never source files."""
 
 import os
+import re
 from urllib.parse import urlparse
 
 import httpx
@@ -165,3 +166,69 @@ async def configure_provider(key, model):
             except httpx.HTTPError:
                 failed += 1
     return {"updated": updated, "failed": failed}
+
+
+def select_passage(text, query, limit=1200):
+    """Select one lexical window; extraction/ranking is not source verification."""
+    stop = {"what", "when", "where", "which", "that", "this", "with", "from", "have", "explain", "please", "about"}
+    terms = list(dict.fromkeys(
+        word.casefold().rstrip("s") for word in re.findall(r"\w{4,}", query)
+        if word.casefold() not in stop
+    ))[:12]
+    best, score = "", 0
+    for start in range(0, len(text), 800):
+        window = text[start:start + limit]
+        folded = window.casefold()
+        hits = sum(term in folded for term in terms)
+        if hits > score:
+            best, score = window, hits
+    return best
+
+
+async def passages(sources, query):
+    """Read at most two bounded private excerpts; never persist the corpus here."""
+    primary = config()
+    if primary is None:
+        return []
+    connections = [item for item in [primary, config("LIBRARY_SECONDARY")] if item]
+    results = []
+    async with httpx.AsyncClient(timeout=20, follow_redirects=False) as client:
+        for source in sources[:2]:
+            try:
+                matches = await pages(source["title"])
+            except (httpx.HTTPError, ValueError):
+                continue
+            for item in matches["items"]:
+                if item["title"].casefold() != source["title"].casefold():
+                    continue
+                if not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", item["id"]):
+                    continue
+                cfg = next((cfg for cfg in connections if item["url"] == cfg[0] + "/kb/" + item["id"]), None)
+                if cfg is None:
+                    continue
+                base, token = cfg
+                try:
+                    async with client.stream(
+                        "GET", base + "/api/v1/pages/" + item["id"],
+                        headers={"Authorization": "Bearer " + token},
+                    ) as response:
+                        response.raise_for_status()
+                        raw = bytearray()
+                        async for chunk in response.aiter_bytes():
+                            if len(raw) + len(chunk) > 4 * 1024 * 1024:
+                                raise ValueError("Source response exceeds the retrieval limit")
+                            raw.extend(chunk)
+                    import json
+
+                    page = json.loads(raw)
+                    # Cite actual source text only, not a catalog card mistaken for a book.
+                    excerpt = select_passage(page.get("extracted_text") or "", query)
+                    if excerpt:
+                        results.append({
+                            "source_id": source["id"], "title": item["title"], "url": item["url"],
+                            "text": excerpt, "review_status": "Unreviewed automatic PDF extraction",
+                        })
+                        break
+                except (httpx.HTTPError, ValueError, KeyError):
+                    continue
+    return results

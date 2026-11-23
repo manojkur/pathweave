@@ -454,6 +454,20 @@ async function sendChat() {
       }),
     });
     append(response.text, "assistant");
+    if (response.references?.length) {
+      const refs = document.createElement("p");
+      refs.className = "footnote";
+      refs.append("Private reading supplied: ");
+      for (const reference of response.references) {
+        const link = document.createElement("a");
+        link.textContent = reference.title;
+        link.href = reference.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        refs.append(link, " · ");
+      }
+      log.append(refs);
+    }
     chatTurns.push(
       { role: "user", content: message },
       { role: "assistant", content: response.text },

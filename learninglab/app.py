@@ -318,9 +318,18 @@ async def chat(data: Chat):
     snapshot, profile = worker.current(), store.get("profile", {})
     if data.concept not in {n["id"] for n in snapshot["concepts"]}:
         raise HTTPException(400, "Unknown concept")
+    reading = []
+    if provider.configured():
+        lesson = snapshot.get("lessons", {}).get(data.concept, {})
+        sources = [s for s in content.read("sources.json") if s["id"] in lesson.get("sources", [])]
+        node = next(n for n in snapshot["concepts"] if n["id"] == data.concept)
+        try:
+            reading = await library.passages(sources, node["title"] + " " + data.message[:300])
+        except (httpx.HTTPError, ValueError):
+            reading = []
     try:
         text, usage = await provider.complete(
-            provider.context(snapshot, profile, data.concept, data.message, data.turns)
+            provider.context(snapshot, profile, data.concept, data.message, data.turns, reading)
         )
         mode = "model"
     except (provider.ProviderUnavailable, httpx.HTTPError, KeyError, ValueError):
@@ -341,7 +350,9 @@ async def chat(data: Chat):
                 "release": snapshot["version"],
             },
         )
-    return {"text": text, "mode": mode, "release": snapshot["version"], "usage": usage}
+    return {"text": text, "mode": mode, "release": snapshot["version"], "usage": usage,
+            "references": [{k: item[k] for k in ("source_id", "title", "url")} for item in reading]
+            if mode == "model" else []}
 
 
 @app.get("/api/library", dependencies=[Depends(auth.require_owner)])

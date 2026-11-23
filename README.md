@@ -42,7 +42,7 @@ In **Your profile → AI connection**, configure an OpenRouter key and a current
 | Background roles | Metadata research, consent-aware evidence analysis, simulations, candidate teaching policies/storyboards | Metadata discovery is not full-paper review; changes require owner review |
 | Releases | Content-addressed current snapshots, immutable saved versions, stale-candidate rejection | Release promotion indicates review, not proven pedagogical effectiveness |
 | Source register | 28 research/textbook/tool cards with inspected scope, implication, and limits | Initial scoping work, not a systematic or exhaustive literature review |
-| Private library bridge | Authenticated source search and reference saving through an optional external pages service | Full texts stay in external storage; no copyrighted corpus is bundled |
+| Private library bridge | Authenticated source search, reference saving, and bounded private reading for tutoring/narrative work | At most two 1,200-character excerpts enter model context; extraction and lexical relevance need review |
 | Operations | Single configured owner, revocable sessions, origin and CSRF checks, login throttling, persistent budget reservations, restartable worker | Single-owner deployment; institutional multi-user research requires further work |
 
 ## Research and architecture

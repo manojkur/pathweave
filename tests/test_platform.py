@@ -336,3 +336,41 @@ def test_explicit_provider_sharing_only_replaces_managed_library_key(client, mon
     assert len([r for r in requests if r.method == "PUT"]) == 3
     assert all("new-provider-secret" not in str(r.url) for r in requests)
     assert len([r for r in requests if r.method == "DELETE"]) == 1
+
+
+def test_tutor_receives_private_reading_without_exporting_the_excerpt(client, monkeypatch):
+    import httpx
+
+    from learninglab import library
+
+    headers = sign_in(client)
+    captured = []
+    marker = "private-book-passage-sentinel"
+
+    async def reading(_sources, _query):
+        return [{"source_id": "lebl-ode", "title": "A source", "text": marker,
+                 "url": "https://library.example/kb/page-1"}]
+
+    async def complete(messages):
+        captured.append(messages)
+        return "Consider the rate of change [lebl-ode].", {}
+
+    monkeypatch.setattr(provider, "configured", lambda: True)
+    monkeypatch.setattr(provider, "complete", complete)
+    monkeypatch.setattr(library, "passages", reading)
+    response = client.post("/api/chat", json={"concept": "ode-growth", "message": "Why exponential?"},
+                           headers=headers)
+    assert response.status_code == 200
+    assert marker in captured[0][0]["content"]
+    assert response.json()["references"][0]["source_id"] == "lebl-ode"
+    assert marker not in response.text
+    assert marker not in client.get("/api/export").text
+
+    async def unavailable(_sources, _query):
+        raise httpx.ConnectError("library unavailable")
+
+    monkeypatch.setattr(library, "passages", unavailable)
+    response = client.post("/api/chat", json={"concept": "ode-growth", "message": "Continue"},
+                           headers=headers)
+    assert response.status_code == 200 and response.json()["mode"] == "model"
+    assert response.json()["references"] == []

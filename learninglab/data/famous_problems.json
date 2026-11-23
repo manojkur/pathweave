@@ -1,0 +1,18 @@
+[
+  {
+    "id": "euclid-primes",
+    "title": "Infinitely many primes",
+    "statement": "For every finite list of primes, another prime exists outside that list.",
+    "status": "Classical theorem",
+    "learning_use": "An approachable study in contradiction and constructing a counterexample to a finite list.",
+    "url": "https://mathcs.clarku.edu/~djoyce/elements/bookIX/propIX20.html"
+  },
+  {
+    "id": "millennium",
+    "title": "Millennium Prize Problems",
+    "statement": "A collection of major research problems maintained by the Clay Mathematics Institute.",
+    "status": "Consult the live official record",
+    "learning_use": "Research context: each problem needs a specialized prerequisite path. The collection is not a single exercise set.",
+    "url": "https://www.claymath.org/millennium-problems/"
+  }
+]

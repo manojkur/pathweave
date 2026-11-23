@@ -67,3 +67,5 @@ A second optional read connection uses `LIBRARY_SECONDARY_API_URL` and `LIBRARY_
 ## AI backend selection
 
 OpenRouter is the default. An optional private machine can provide an OpenAI-compatible `/v1` endpoint through `LOCAL_AI_BASE_URL`. The owner can select its served model in the profile settings after a connection check succeeds. Cloud credentials are never sent to that endpoint. A failed local connection does not replace the current backend. The selected backend is shared by tutoring and narrative research; local inference consumes a call reservation with zero monetary reservation. Provider availability is distinct from scientific validation.
+
+The owner can explicitly opt in to copying a verified OpenRouter key and selected model to the configured knowledge workspaces through their encrypted credential APIs. This option is off by default. Only credentials labeled for this connection are replaced; unrelated keys remain separate. Model tiers in those workspaces are set to the selected model. Removing the local saved key does not revoke separately stored workspace credentials.

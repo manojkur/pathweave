@@ -295,3 +295,44 @@ def test_disconnected_local_machine_does_not_switch_active_backend(client, monke
     result = client.post("/api/provider/backend", json={"backend": "local"}, headers=headers)
     assert result.status_code == 503
     assert provider.settings()["backend"] == "openrouter"
+
+
+def test_explicit_provider_sharing_only_replaces_managed_library_key(client, monkeypatch):
+    import asyncio
+
+    import httpx
+
+    from learninglab import library
+
+    monkeypatch.setenv("LIBRARY_API_URL", "https://private-library.test")
+    monkeypatch.setenv("LIBRARY_API_TOKEN", "library-owner-token")
+    original_client = httpx.AsyncClient
+    requests = []
+
+    def respond(request):
+        requests.append(request)
+        assert request.url.host == "private-library.test"
+        assert request.headers["Authorization"] == "Bearer library-owner-token"
+        if request.method == "GET":
+            return httpx.Response(
+                200,
+                json=[
+                    {"id": "managed", "provider": "openrouter", "label": "Pathweave connection"},
+                    {"id": "unrelated", "provider": "openrouter", "label": "Personal key"},
+                ],
+            )
+        if request.method == "DELETE":
+            assert request.url.path.endswith("/managed")
+            return httpx.Response(204)
+        return httpx.Response(201, json={"id": "new"})
+
+    monkeypatch.setattr(
+        library.httpx,
+        "AsyncClient",
+        lambda **kw: original_client(transport=httpx.MockTransport(respond), **kw),
+    )
+    result = asyncio.run(library.configure_provider("new-provider-secret", "example/model"))
+    assert result == {"updated": 1, "failed": 0}
+    assert len([r for r in requests if r.method == "PUT"]) == 3
+    assert all("new-provider-secret" not in str(r.url) for r in requests)
+    assert len([r for r in requests if r.method == "DELETE"]) == 1

@@ -126,3 +126,42 @@ async def sync_notebook(snapshot, report):
             response = await client.post(base + "/api/v1/pages", json=payload, headers=headers)
         response.raise_for_status()
     return {"connected": True, "page_id": response.json()["id"]}
+
+
+async def configure_provider(key, model):
+    """Explicit owner-requested credential sharing with configured private workspaces."""
+    updated, failed = 0, 0
+    async with httpx.AsyncClient(timeout=20, follow_redirects=False) as client:
+        for cfg in [config(), config("LIBRARY_SECONDARY")]:
+            if cfg is None:
+                continue
+            base, token = cfg
+            headers = {"Authorization": "Bearer " + token}
+            try:
+                response = await client.get(base + "/api/v1/api-keys", headers=headers)
+                response.raise_for_status()
+                previous = [
+                    r["id"]
+                    for r in response.json()
+                    if r["provider"] == "openrouter" and r["label"] == "Pathweave connection"
+                ]
+                response = await client.post(
+                    base + "/api/v1/api-keys",
+                    headers=headers,
+                    json={"provider": "openrouter", "api_key": key, "label": "Pathweave connection"},
+                )
+                response.raise_for_status()
+                for tier in ["light", "medium", "heavy"]:
+                    response = await client.put(
+                        base + "/api/v1/model-tiers/" + tier,
+                        headers=headers,
+                        json={"provider": "openrouter", "model": model},
+                    )
+                    response.raise_for_status()
+                for old in previous:
+                    response = await client.delete(base + "/api/v1/api-keys/" + old, headers=headers)
+                    response.raise_for_status()
+                updated += 1
+            except httpx.HTTPError:
+                failed += 1
+    return {"updated": updated, "failed": failed}

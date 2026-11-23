@@ -134,6 +134,7 @@ class Preferences(BaseModel):
 class ProviderConfig(BaseModel):
     key: str = Field(min_length=16, max_length=300)
     model: str = Field(min_length=3, max_length=200)
+    share_with_library: bool = False
 
 
 class BackendChoice(BaseModel):
@@ -190,9 +191,10 @@ async def configure_provider(data: ProviderConfig):
             400, "The provider could not verify this key; check its status in your provider account"
         ) from exc
     provider.save_settings(data.key, data.model)
+    shared = await library.configure_provider(data.key, data.model) if data.share_with_library else None
     with store.db() as con:
         con.execute("UPDATE jobs SET next_run=0 WHERE role='narrative' AND status!='running'")
-    return {"configured": True, "model": data.model}
+    return {"configured": True, "model": data.model, "library_sync": shared}
 
 
 @app.delete("/api/provider", dependencies=[Depends(auth.require_owner)])

@@ -6,6 +6,8 @@ Pathweave investigates how people can build durable understanding through better
 
 This is a working **research preview**, not a validated replacement for a mathematics education. A map extending toward research is not a completed frontier curriculum. Synthetic learners generate hypotheses; only appropriate human studies can establish human learning benefits.
 
+![Pathweave learning workspace](docs/images/overview.png)
+
 ## Run it
 
 Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/), or Docker Compose.

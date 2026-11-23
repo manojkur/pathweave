@@ -61,3 +61,9 @@ The reference adapter expects:
 Requests use a server-side bearer credential scoped to the intended library owner. Search results expose metadata, not storage credentials or signed file URLs. Save operations check exact titles before creation, making normal retries idempotent. Concurrent saves may still require server-side unique source-id enforcement in a multi-user deployment.
 
 No browser-supplied URL can choose the connector destination. Only configured HTTPS endpoints receive its credential; redirects are not followed. Full-text ingestion should run inside the library's own authenticated ingestion API, with source URL, checksum, access/license basis, retrieval date, and review depth retained alongside the object.
+
+A second optional read connection uses `LIBRARY_SECONDARY_API_URL` and `LIBRARY_SECONDARY_API_TOKEN`. Search combines metadata across both; new project records are written to the primary library. The experimentation role maintains a current research notebook in that library with the release id, source repository, workspace link, and synthetic results, without learner records. Library-side agents can consume that page as structured current state.
+
+## AI backend selection
+
+OpenRouter is the default. An optional private machine can provide an OpenAI-compatible `/v1` endpoint through `LOCAL_AI_BASE_URL`. The owner can select its served model in the profile settings after a connection check succeeds. Cloud credentials are never sent to that endpoint. A failed local connection does not replace the current backend. The selected backend is shared by tutoring and narrative research; local inference consumes a call reservation with zero monetary reservation. Provider availability is distinct from scientific validation.

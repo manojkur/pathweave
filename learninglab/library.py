@@ -6,8 +6,11 @@ from urllib.parse import urlparse
 import httpx
 
 
-def config():
-    base, token = os.environ.get("LIBRARY_API_URL", "").rstrip("/"), os.environ.get("LIBRARY_API_TOKEN", "")
+def config(prefix="LIBRARY"):
+    base, token = (
+        os.environ.get(prefix + "_API_URL", "").rstrip("/"),
+        os.environ.get(prefix + "_API_TOKEN", ""),
+    )
     if not base or not token:
         return None
     parsed = urlparse(base)
@@ -20,22 +23,36 @@ async def pages(query):
     cfg = config()
     if cfg is None:
         return {"connected": False, "items": []}
-    base, token = cfg
+    all_items, warnings = [], []
     async with httpx.AsyncClient(timeout=20, follow_redirects=False) as client:
-        response = await client.get(
-            base + "/api/v1/pages",
-            params={"q": query, "limit": 30},
-            headers={"Authorization": "Bearer " + token},
-        )
-        response.raise_for_status()
-        data = response.json()
+        for connection in [cfg, config("LIBRARY_SECONDARY")]:
+            if connection is None:
+                continue
+            base, token = connection
+            try:
+                response = await client.get(
+                    base + "/api/v1/pages",
+                    params={"q": query, "limit": 30},
+                    headers={"Authorization": "Bearer " + token},
+                )
+                response.raise_for_status()
+                data = response.json()
+                all_items.extend(
+                    {
+                        "id": p["id"],
+                        "title": p["title"],
+                        "type": p.get("page_type"),
+                        "url": base + "/kb/" + p["id"],
+                    }
+                    for p in data.get("items", [])
+                )
+            except httpx.HTTPError:
+                warnings.append("A configured library connection is temporarily unavailable")
     # Only metadata crosses into the browser; no signed file URLs are exposed here.
     return {
         "connected": True,
-        "items": [
-            {"id": p["id"], "title": p["title"], "type": p.get("type"), "url": base + "/kb/" + p["id"]}
-            for p in data.get("items", [])
-        ],
+        "items": all_items,
+        "warnings": warnings,
     }
 
 
@@ -44,7 +61,7 @@ async def save_reference(source):
     if cfg is None:
         raise ValueError("Connect a private library before saving references")
     base, token = cfg
-    # Check by stable public source id so retries do not duplicate existing references.
+    # Exact title check makes normal retries idempotent across the configured libraries.
     existing = await pages(source["title"])
     for item in existing["items"]:
         if item["title"] == source["title"]:
@@ -67,3 +84,45 @@ async def save_reference(source):
         response.raise_for_status()
         page = response.json()
     return {"id": page["id"], "title": page["title"], "url": base + "/kb/" + page["id"]}
+
+
+async def sync_notebook(snapshot, report):
+    """Publish current project state into the private library, without learner records."""
+    import json
+
+    cfg = config()
+    if cfg is None:
+        return {"connected": False}
+    base, token = cfg
+    title = "Pathweave research notebook"
+    payload = {
+        "title": title,
+        "page_type": "note",
+        "content_text": json.dumps(
+            {
+                "project": "Pathweave",
+                "current_release": snapshot["version"],
+                "workspace": os.environ.get("WORKSPACE_URL", ""),
+                "repository": "https://github.com/manojkur/pathweave",
+                "concepts": len(snapshot["concepts"]),
+                "pilot_lessons": len(snapshot["lessons"]),
+                "report": report,
+                "evidence_boundary": "Synthetic experiments and scoping reviews; no human efficacy established",
+            },
+            indent=2,
+        ),
+        "metadata": {"external_source_id": "pathweave:current-state", "integration": "pathweave"},
+    }
+    async with httpx.AsyncClient(timeout=20, follow_redirects=False) as client:
+        headers = {"Authorization": "Bearer " + token}
+        response = await client.get(base + "/api/v1/pages", params={"q": title, "limit": 30}, headers=headers)
+        response.raise_for_status()
+        existing = next((p for p in response.json().get("items", []) if p["title"] == title), None)
+        if existing:
+            response = await client.patch(
+                base + "/api/v1/pages/" + existing["id"], json=payload, headers=headers
+            )
+        else:
+            response = await client.post(base + "/api/v1/pages", json=payload, headers=headers)
+        response.raise_for_status()
+    return {"connected": True, "page_id": response.json()["id"]}

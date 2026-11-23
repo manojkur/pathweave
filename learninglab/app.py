@@ -111,6 +111,9 @@ def state():
         "research_inbox": store.get("research_inbox", []),
         "provider_configured": provider.configured(),
         "provider_model": provider.settings()["model"],
+        "provider_backend": provider.settings()["backend"],
+        "local_ai_configured": bool(provider.settings()["local_url"]),
+        "local_ai_model": provider.settings()["local_model"],
         "library_connected": bool(library.config()),
         "worker_alive": time.time() - store.get("worker_heartbeat", 0) < 180,
         "links": {
@@ -131,6 +134,23 @@ class Preferences(BaseModel):
 class ProviderConfig(BaseModel):
     key: str = Field(min_length=16, max_length=300)
     model: str = Field(min_length=3, max_length=200)
+
+
+class BackendChoice(BaseModel):
+    backend: str = Field(max_length=20)
+    model: str = Field(default="", max_length=200)
+
+
+@app.post("/api/provider/backend", dependencies=[Depends(auth.require_owner)])
+async def select_backend(data: BackendChoice):
+    try:
+        await provider.select_backend(data.backend, data.model)
+    except (httpx.HTTPError, provider.ProviderUnavailable, KeyError, ValueError) as exc:
+        raise HTTPException(
+            503,
+            "The requested backend is not ready. Reconnect the local machine and confirm its served model before switching.",
+        ) from exc
+    return {"backend": provider.settings()["backend"]}
 
 
 class PasswordChange(BaseModel):

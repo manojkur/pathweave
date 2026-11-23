@@ -4,6 +4,7 @@ import json
 import os
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx
 
@@ -20,28 +21,39 @@ def settings():
     return {
         "key": os.environ.get("OPENROUTER_API_KEY") or saved.get("key", ""),
         "model": os.environ.get("OPENROUTER_MODEL") or saved.get("model", ""),
+        "backend": saved.get("backend", "openrouter"),
+        "local_model": saved.get("local_model") or os.environ.get("LOCAL_AI_MODEL", ""),
+        "local_url": os.environ.get("LOCAL_AI_BASE_URL", "").rstrip("/"),
     }
 
 
 def configured():
     cfg = settings()
+    if cfg["backend"] == "local":
+        return bool(cfg["local_url"] and cfg["local_model"])
     return bool(cfg["key"] and cfg["model"])
 
 
 def save_settings(key, model):
+    saved = settings()
+    saved.update(key=key, model=model, backend="openrouter")
+    write_settings(saved)
+
+
+def write_settings(saved):
     path = directory() / "provider.json"
     temporary = Path(str(path) + ".tmp")
     fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as stream:
-        json.dump({"key": key, "model": model}, stream)
+        json.dump({k: v for k, v in saved.items() if k != "local_url"}, stream)
     os.chmod(temporary, 0o600)
     temporary.replace(path)
 
 
-def reserve():
+def reserve(*, local=False):
     key = f"ai:{time.strftime('%Y-%m-%d', time.gmtime())}"
-    amount = float(os.environ.get("AI_CALL_USD_LIMIT", ".05"))
-    if amount <= 0:
+    amount = 0.0 if local else float(os.environ.get("AI_CALL_USD_LIMIT", ".05"))
+    if amount <= 0 and not local:
         raise ProviderUnavailable("A positive per-call budget is required")
     with db() as con:
         con.execute("BEGIN IMMEDIATE")
@@ -89,6 +101,8 @@ async def complete(messages, *, structured=False):
     # Price caps use published per-token rates from the provider's live model catalog.
     # Refuse unknown/free-text model aliases to keep the worst-case reservation meaningful.
     cfg = settings()
+    if cfg["backend"] == "local":
+        return await local_complete(cfg, messages, structured)
     model = cfg["model"]
     async with httpx.AsyncClient(timeout=45) as client:
         catalog = await client.get("https://openrouter.ai/api/v1/models")
@@ -127,3 +141,46 @@ async def complete(messages, *, structured=False):
         response.raise_for_status()
         result = response.json()
         return result["choices"][0]["message"]["content"], result.get("usage", {})
+
+
+def local_url():
+    url = settings()["local_url"]
+    parsed = urlparse(url)
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.hostname
+        or parsed.username
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ProviderUnavailable("The local machine endpoint is not configured by the host")
+    return url
+
+
+async def select_backend(backend, model=""):
+    cfg = settings()
+    if backend == "local":
+        async with httpx.AsyncClient(timeout=8, follow_redirects=False) as client:
+            response = await client.get(local_url() + "/models")
+            response.raise_for_status()
+        ids = [entry["id"] for entry in response.json().get("data", [])]
+        chosen = model or cfg["local_model"] or (ids[0] if ids else "")
+        if chosen not in ids:
+            raise ProviderUnavailable("Choose a model currently served by the local machine")
+        cfg["local_model"] = chosen
+    elif backend != "openrouter":
+        raise ProviderUnavailable("Unknown AI backend")
+    cfg["backend"] = backend
+    write_settings(cfg)
+
+
+async def local_complete(cfg, messages, structured):
+    payload = {"model": cfg["local_model"], "messages": messages, "max_tokens": 1200}
+    if structured:
+        payload["response_format"] = {"type": "json_object"}
+    reserve(local=True)
+    async with httpx.AsyncClient(timeout=45, follow_redirects=False) as client:
+        response = await client.post(local_url() + "/chat/completions", json=payload)
+        response.raise_for_status()
+    result = response.json()
+    return result["choices"][0]["message"]["content"], result.get("usage", {})

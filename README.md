@@ -25,7 +25,7 @@ uv run --env-file .env python -m learninglab.worker
 
 The standalone worker also needs the same environment. `docker compose up --build -d` loads `.env` for both services and persists their shared data volume automatically. Open `http://localhost:8000` and sign in. There is no registration endpoint.
 
-In **Your profile → AI connection**, configure an OpenRouter key and a current model identifier privately. Alternatively supply the server environment variables. Without a provider, original lessons, interactive scenes, narrow concept checks, and synthetic experiments still work; the tutor provides a labeled local guide.
+In **Your profile → AI connection**, configure an OpenRouter key and a current model identifier privately. The same panel can switch to an optional private OpenAI-compatible machine once it reconnects; its endpoint is configured only by the host. Alternatively supply the server environment variables. Without a provider, original lessons, interactive scenes, narrow concept checks, and synthetic experiments still work; the tutor provides a labeled local guide.
 
 ## What works today
 
@@ -35,7 +35,7 @@ In **Your profile → AI connection**, configure an OpenRouter key and a current
 | Idea studio | 12 original pilot lessons; interactive ODE, linear-map, derivative, convergence, fraction, probability, and quantifier scenes | Restricted scene templates; no claim of professional film quality or arbitrary scene generation |
 | Self-assessment | 11 seeded original concept-check families; separate written proof submissions | Narrow recognition tasks; proof submissions await review; no validated ability score |
 | Learner profile | Per-concept evidence, assisted-attempt flags, approximate uncertainty, revisit suggestions | A transparent Beta baseline, not a psychometric instrument |
-| Tutor | Bounded current context and optional OpenRouter inference; editable speech dictation and local speech output where supported | Model errors remain possible; speech support and processing depend on the browser |
+| Tutor | Bounded current context and selectable OpenRouter or private-machine inference; editable speech dictation and local speech output where supported | Model errors remain possible; speech support and processing depend on the browser |
 | Cognitive experiments | Blank initial trace memory, bounded working buffer, reinforcement, decay, paired-seed sequence comparisons | Toy cognitive model; neither an ACT-R implementation nor an uncontaminated LLM learner |
 | Background roles | Metadata research, consent-aware evidence analysis, simulations, candidate teaching policies/storyboards | Metadata discovery is not full-paper review; changes require owner review |
 | Releases | Content-addressed current snapshots, immutable saved versions, stale-candidate rejection | Release promotion indicates review, not proven pedagogical effectiveness |

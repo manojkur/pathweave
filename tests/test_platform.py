@@ -32,6 +32,7 @@ def sign_in(client):
         headers={"Origin": "http://testserver"},
     )
     assert r.status_code == 200
+    assert "HttpOnly" in r.headers["set-cookie"] and "SameSite=strict" in r.headers["set-cookie"]
     return {"Origin": "http://testserver", "X-CSRF-Token": r.json()["csrf"]}
 
 
@@ -47,9 +48,7 @@ def test_owner_boundary_csrf_and_revocation(client):
         == 403
     )
     headers = sign_in(client)
-    assert "httponly" in client.cookies.get("learning_session", "").lower() or client.cookies.get(
-        "learning_session"
-    )
+    assert client.cookies.get("learning_session")
     assert client.get("/api/state").status_code == 200
     assert client.post("/api/profile", json={}).status_code == 403
     assert (
@@ -198,7 +197,7 @@ def test_release_promotion_rejects_stale_base_and_preserves_snapshots(client):
     with store.db() as con:
         for key, base in [("stale", "old"), ("fresh", active["version"])]:
             con.execute(
-                "INSERT INTO proposals VALUES (?,?,?,?,?)".replace("(?,?,?,?,?)", "(?,?,?,?)"),
+                "INSERT INTO proposals VALUES (?,?,?,?)",
                 (key, json.dumps({"base_version": base, "snapshot": candidate}), "pending", time.time()),
             )
     assert client.post("/api/proposals/stale/promote", headers=headers).status_code == 409
@@ -206,3 +205,87 @@ def test_release_promotion_rejects_stale_base_and_preserves_snapshots(client):
     assert promoted.status_code == 200
     assert store.get("release:" + active["version"]) == active
     assert worker.current()["version"] != active["version"]
+
+
+def test_password_rotation_revokes_sessions_and_keeps_secret_out_of_exports(client):
+    headers = sign_in(client)
+    replacement = "a-new-local-fixture-password"
+    result = client.post(
+        "/api/auth/password", json={"current": PASSWORD, "new": replacement}, headers=headers
+    )
+    assert result.status_code == 200
+    assert client.get("/api/state").status_code == 401
+    rejected = client.post(
+        "/api/auth/login",
+        json={"username": "owner", "password": PASSWORD},
+        headers={"Origin": "http://testserver"},
+    )
+    assert rejected.status_code == 401
+    accepted = client.post(
+        "/api/auth/login",
+        json={"username": "owner", "password": replacement},
+        headers={"Origin": "http://testserver"},
+    )
+    assert accepted.status_code == 200
+    exported = client.get("/api/export").text
+    assert replacement not in exported and "owner_password_hash" not in exported
+
+
+def test_provider_secret_file_is_private_and_never_returned(client):
+    sign_in(client)
+    secret = "not-a-real-provider-secret-for-testing"
+    provider.save_settings(secret, "test/model")
+    path = store.directory() / "provider.json"
+    assert path.stat().st_mode & 0o777 == 0o600
+    assert secret not in client.get("/api/state").text
+    assert secret not in client.get("/api/export").text
+
+
+def test_local_backend_receives_no_cloud_credential(client, monkeypatch):
+    import asyncio
+
+    import httpx
+
+    monkeypatch.setenv("LOCAL_AI_BASE_URL", "http://local-machine.test/v1")
+    provider.save_settings("cloud-secret-that-must-not-leak", "cloud/model")
+    original_client = httpx.AsyncClient
+    seen = []
+
+    def respond(request):
+        seen.append(request)
+        assert "authorization" not in request.headers
+        assert request.url.host == "local-machine.test"
+        if request.url.path.endswith("/models"):
+            return httpx.Response(200, json={"data": [{"id": "local-model"}]})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "local result"}}]})
+
+    monkeypatch.setattr(
+        provider.httpx,
+        "AsyncClient",
+        lambda **kw: original_client(transport=httpx.MockTransport(respond), **kw),
+    )
+    asyncio.run(provider.select_backend("local", "local-model"))
+    result, _ = asyncio.run(provider.complete([{"role": "user", "content": "hello"}]))
+    assert result == "local result" and len(seen) == 2
+    with store.db() as con:
+        assert con.execute("SELECT amount FROM limits WHERE key LIKE 'ai:%'").fetchone()[0] == 0
+
+
+def test_disconnected_local_machine_does_not_switch_active_backend(client, monkeypatch):
+    import httpx
+
+    headers = sign_in(client)
+    monkeypatch.setenv("LOCAL_AI_BASE_URL", "http://local-machine.test/v1")
+    original_client = httpx.AsyncClient
+
+    def disconnected(request):
+        raise httpx.ConnectError("offline", request=request)
+
+    monkeypatch.setattr(
+        provider.httpx,
+        "AsyncClient",
+        lambda **kw: original_client(transport=httpx.MockTransport(disconnected), **kw),
+    )
+    result = client.post("/api/provider/backend", json={"backend": "local"}, headers=headers)
+    assert result.status_code == 503
+    assert provider.settings()["backend"] == "openrouter"

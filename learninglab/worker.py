@@ -153,6 +153,11 @@ async def run_role(role, force=False):
         elif role == "experimentation":
             result = experiment(current())
             store.put("experiment", result)
+            if library.config():
+                try:
+                    store.put("library_sync", await library.sync_notebook(current(), result))
+                except httpx.HTTPError:
+                    store.put("library_sync", {"connected": False, "status": "retry_on_next_cycle"})
         elif role == "narrative":
             result = await narrative()
         else:

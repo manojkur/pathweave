@@ -16,7 +16,8 @@ services:
     volumes: ["learning_data:/data"]
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "/app/.venv/bin/python", "-m", "learninglab.worker", "--health"]
+      test:
+        ["CMD", "/app/.venv/bin/python", "-m", "learninglab.worker", "--health"]
       interval: 60s
       timeout: 5s
       start_period: 120s

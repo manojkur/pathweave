@@ -411,6 +411,7 @@ def delete_profile():
         con.execute("DELETE FROM kv WHERE key IN ('profile','analysis')")
         con.execute("DELETE FROM events")
         con.execute("DELETE FROM attempts")
+        con.execute("UPDATE jobs SET result=NULL WHERE role='analysis'")
     return {"ok": True}
 
 

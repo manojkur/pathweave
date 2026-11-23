@@ -184,9 +184,15 @@ def test_no_research_aggregation_without_consent_and_data_deletion(client):
     store.put("profile", {"skills": {"algebra": {"intuition": {"observations": 3, "mean": 0.7}}}})
     assert worker.analysis()["skill_observations"] == []
     store.event("conversation", {"private": "text"})
+    with store.db() as con:
+        con.execute(
+            "INSERT INTO jobs(role,status,result) VALUES ('analysis','idle',?)",
+            (json.dumps({"skill_observations": ["private evidence"]}),),
+        )
     client.delete("/api/profile", headers=headers)
     exported = client.get("/api/export").json()
     assert exported == {"profile": {}, "events": []}
+    assert "private evidence" not in client.get("/api/state").text
 
 
 def test_release_promotion_rejects_stale_base_and_preserves_snapshots(client):

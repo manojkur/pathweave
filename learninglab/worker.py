@@ -11,7 +11,7 @@ import xml.etree.ElementTree as ET
 
 import httpx
 
-from . import content, provider, store
+from . import content, library, provider, store
 from .simulation import experiment
 
 ROLES = ("research", "analysis", "experimentation", "narrative")

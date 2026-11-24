@@ -374,3 +374,32 @@ def test_tutor_receives_private_reading_without_exporting_the_excerpt(client, mo
                            headers=headers)
     assert response.status_code == 200 and response.json()["mode"] == "model"
     assert response.json()["references"] == []
+
+
+def test_lesson_sources_are_private_automatic_and_fail_soft(client, monkeypatch):
+    import httpx
+
+    from learninglab import library
+
+    assert client.get("/api/sources").status_code == 401
+    sign_in(client)
+    seen = []
+
+    async def passages(sources, query):
+        seen.append((sources, query))
+        return [{"source_id": "book", "title": "Reading", "text": "A bounded passage"}]
+
+    monkeypatch.setattr(library, "passages", passages)
+    result = client.get("/api/sources?concept=ode-growth")
+    assert result.status_code == 200
+    assert seen[0][0] and "differential equations" in seen[0][1]
+    assert result.json()["reading"][0]["text"] == "A bounded passage"
+    assert "url" not in result.json()["reading"][0]
+    assert client.get("/api/sources?concept=unknown").status_code == 404
+
+    async def unavailable(*_args):
+        raise httpx.ConnectError("unavailable")
+
+    monkeypatch.setattr(library, "passages", unavailable)
+    result = client.get("/api/sources?concept=ode-growth").json()
+    assert result["unavailable"] and not result["reading"] and result["references"]

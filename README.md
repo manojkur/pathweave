@@ -6,8 +6,6 @@ Pathweave investigates how people can build durable understanding through better
 
 This is a working **research preview**, not a validated replacement for a mathematics education. A map extending toward research is not a completed frontier curriculum. Synthetic learners generate hypotheses; only appropriate human studies can establish human learning benefits.
 
-![Pathweave learning workspace](docs/images/overview.png)
-
 ## Run it
 
 Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/), or Docker Compose.
@@ -27,14 +25,14 @@ uv run --env-file .env python -m learninglab.worker
 
 The standalone worker also needs the same environment. `docker compose up --build -d` loads `.env` for both services and persists their shared data volume automatically. Open `http://localhost:8000` and sign in. There is no registration endpoint.
 
-In **Your profile → AI connection**, configure an OpenRouter key and a current model identifier privately. The same panel can switch to an optional private OpenAI-compatible machine once it reconnects; its endpoint is configured only by the host. Alternatively supply the server environment variables. Without a provider, original lessons, interactive scenes, narrow concept checks, and synthetic experiments still work; the tutor provides a labeled local guide.
+In **Settings → AI**, configure an OpenRouter key and a current model identifier privately. The same panel can switch to an optional private OpenAI-compatible machine once it reconnects; its endpoint is configured only by the host. Alternatively supply the server environment variables. Without a provider, original lessons, interactive scenes, narrow concept checks, and synthetic experiments still work; the tutor provides a labeled local guide.
 
 ## What works today
 
 | Surface | Initial implementation | Important limit |
 |---|---|---|
 | Learning paths | 40 concepts, chosen prerequisite graph, typed cross-connections, two branch-order policies | A prototype map, not a complete curriculum or established optimal sequence |
-| Idea studio | 12 original pilot lessons; interactive ODE, linear-map, derivative, convergence, fraction, probability, and quantifier scenes | Restricted scene templates; no claim of professional film quality or arbitrary scene generation |
+| Lessons | 12 original pilot lessons; interactive ODE, linear-map, derivative, convergence, fraction, probability, and quantifier scenes | Restricted scene templates; no claim of professional film quality or arbitrary scene generation |
 | Self-assessment | 11 seeded original concept-check families; separate written proof submissions | Narrow recognition tasks; proof submissions await review; no validated ability score |
 | Learner profile | Per-concept evidence, assisted-attempt flags, approximate uncertainty, revisit suggestions | A transparent Beta baseline, not a psychometric instrument |
 | Tutor | Bounded current context and selectable OpenRouter or private-machine inference; editable speech dictation and local speech output where supported | Model errors remain possible; speech support and processing depend on the browser |
@@ -44,6 +42,8 @@ In **Your profile → AI connection**, configure an OpenRouter key and a current
 | Source register | 28 research/textbook/tool cards with inspected scope, implication, and limits | Initial scoping work, not a systematic or exhaustive literature review |
 | Private library bridge | Authenticated source search, reference saving, and bounded private reading for tutoring/narrative work | At most two 1,200-character excerpts enter model context; extraction and lexical relevance need review |
 | Operations | Single configured owner, revocable sessions, origin and CSRF checks, login throttling, persistent budget reservations, restartable worker | Single-owner deployment; institutional multi-user research requires further work |
+
+The interface uses a neutral dark theme with **Learn**, **My path**, **Practice**, and **Progress**. Available lessons are separate from future topics in the concept map. Related reading loads automatically within each lesson; source-service details and credentials stay on the server. Hosted installations can place AI settings, background jobs, and review controls in their own authenticated shell.
 
 ## Research and architecture
 

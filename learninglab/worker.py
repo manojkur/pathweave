@@ -22,6 +22,17 @@ def current():
 
 
 async def research():
+    snapshot = current()
+    goal = store.get("profile", {}).get("goal", "ode-growth")
+    node = next((n for n in snapshot["concepts"] if n["id"] == goal), snapshot["concepts"][0])
+    references = [s for s in content.read("sources.json")
+                  if s["id"] in snapshot.get("lessons", {}).get(node["id"], {}).get("sources", [])]
+    try:
+        found = await library.relevant(node["title"], references)
+        store.put("source_discovery", {"concept": node["id"], "items": found.get("items", []),
+                                       "updated": time.time(), "available": found.get("connected", False)})
+    except (httpx.HTTPError, ValueError, KeyError):
+        store.put("source_discovery", {"concept": node["id"], "items": [], "updated": time.time(), "available": False})
     async with httpx.AsyncClient(timeout=25) as client:
         response = await client.get(
             "https://export.arxiv.org/api/query",
@@ -158,7 +169,7 @@ async def run_role(role, force=False):
         elif role == "experimentation":
             result = experiment(current())
             store.put("experiment", result)
-            if library.config():
+            if library.connected():
                 try:
                     store.put("library_sync", await library.sync_notebook(current(), result))
                 except httpx.HTTPError:

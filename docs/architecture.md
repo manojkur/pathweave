@@ -50,6 +50,20 @@ Use the same data volume for web and worker. Do not expose the service's backend
 
 Hosts that protect the entire workspace can return an `X-Login-URL` response header selecting a neutral sign-in page. Only a same-origin target without embedded credentials is accepted. On authentication failure or sign-out, the browser clears the workspace and navigates to that page; standalone installations retain the built-in sign-in screen. Back/forward restoration rechecks the session before rendering. The host must enforce access at its proxy for every private page, API, and asset; client redirects alone are insufficient. If the host shares its session across routes, it must explicitly manage the root cookie path and revoke that shared session on logout.
 
+### Host-managed sources and appearance
+
+A host can set `HOST_SOURCE_URL` and `HOST_SOURCE_TOKEN` to own all library integration. The learning app and worker then use that service instead of direct library credentials. Its endpoint accepts authenticated JSON `POST` requests with an `operation` field:
+
+- `search`: `{query,sources}` → `{connected,items}`; the host decides relevance and library routing.
+- `read`: `{query,sources}` → `{items:[{source_id,title,url,text}]}`; only two 1,200-character passages are accepted, within a 512 KiB response cap.
+- `save`: `{source}` → a reference record.
+- `notebook`: `{snapshot,report}` → synchronization status, without learner records.
+- `provider`: `{key,model}` → explicit owner-requested provider-sharing results.
+
+Credentials are sent only to the configured endpoint and redirects are refused. HTTPS is required except for loopback and the private `source-broker` container hostname. A service failure does not fall back to another destination. `GET /api/sources?concept=...` is owner-authenticated and returns lesson references and bounded reading without storage credentials or library navigation URLs. The browser loads it automatically when a lesson opens; tutoring and the background worker use the same adapter. Source excerpts are not persisted in research discovery records.
+
+The host can supply `HOST_NAME`, `HOST_HOME_PATH`, `HOST_SETTINGS_PATH`, and `HOST_FONT_URL` at runtime. These settings do not hard-code host identity into the public project. A same-origin font can match the host typography. Administration stays in the host; the learning interface contains no repository or project-promotion links.
+
 ## Optional library contract
 
 The external library owns all files, extraction, full text, private reading notes, and rights metadata. Configure `LIBRARY_API_URL`, `LIBRARY_API_TOKEN`, `LIBRARY_WEB_URL`, and `LIBRARY_LABEL` only in private runtime settings.

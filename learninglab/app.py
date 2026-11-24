@@ -109,12 +109,17 @@ def state():
         "proposals": proposals,
         "experiment": store.get("experiment"),
         "research_inbox": store.get("research_inbox", []),
+        "source_discovery": store.get("source_discovery"),
         "provider_configured": provider.configured(),
         "provider_model": provider.settings()["model"],
         "provider_backend": provider.settings()["backend"],
         "local_ai_configured": bool(provider.settings()["local_url"]),
         "local_ai_model": provider.settings()["local_model"],
-        "library_connected": bool(library.config()),
+        "library_connected": library.connected(),
+        "host": {"name": os.environ.get("HOST_NAME", ""),
+                 "home_path": os.environ.get("HOST_HOME_PATH", "/"),
+                 "settings_path": os.environ.get("HOST_SETTINGS_PATH", ""),
+                 "font_url": os.environ.get("HOST_FONT_URL", "")},
         "worker_alive": time.time() - store.get("worker_heartbeat", 0) < 180,
         "links": {
             "host": os.environ.get("HOST_URL", ""),
@@ -353,6 +358,24 @@ async def chat(data: Chat):
     return {"text": text, "mode": mode, "release": snapshot["version"], "usage": usage,
             "references": [{k: item[k] for k in ("source_id", "title", "url")} for item in reading]
             if mode == "model" else []}
+
+
+@app.get("/api/sources", dependencies=[Depends(auth.require_owner)])
+async def lesson_sources(concept: str = "ode-growth"):
+    snapshot = worker.current()
+    node = next((n for n in snapshot["concepts"] if n["id"] == concept), None)
+    if node is None:
+        raise HTTPException(404, "Unknown concept")
+    lesson = snapshot.get("lessons", {}).get(concept, {})
+    references = [s for s in content.read("sources.json") if s["id"] in lesson.get("sources", [])]
+    reading, unavailable = [], False
+    try:
+        reading = await library.passages(references, node["title"] + " " + lesson.get("question", "") + " " + lesson.get("intuition", node["outcome"]) + " " + lesson.get("formal", ""))
+    except (httpx.HTTPError, ValueError, KeyError):
+        unavailable = True
+    return {"concept": concept, "references": [{k: source[k] for k in ("id", "title", "url")} for source in references],
+            "reading": [{k: item[k] for k in ("source_id", "title", "text")} for item in reading],
+            "unavailable": unavailable}
 
 
 @app.get("/api/library", dependencies=[Depends(auth.require_owner)])

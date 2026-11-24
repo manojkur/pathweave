@@ -52,3 +52,11 @@ def test_reading_fetch_is_authenticated_bounded_and_does_not_follow_source_links
         **kwargs, transport=httpx.MockTransport(oversized),
     ))
     assert asyncio.run(library.passages([{"id": "book", "title": "Source"}], "growth")) == []
+
+
+def test_excerpts_prefer_explanation_to_dense_book_index():
+    explanation = ("An exponential solution follows the differential equation. Its growth rate is proportional "
+                   "to the current state. The initial value determines a unique curve. ") * 8
+    index = "\n".join(f"differential exponential growth initial unique curve, {number}" for number in range(100,180))
+    passage = library.select_passage(explanation + "\nINDEX\n" + index, "differential exponential growth initial unique curve")
+    assert "An exponential solution" in passage and "INDEX" not in passage

@@ -7,6 +7,43 @@ from urllib.parse import urlparse
 import httpx
 
 
+def host_config():
+    url = os.environ.get("HOST_SOURCE_URL", "")
+    token = os.environ.get("HOST_SOURCE_TOKEN", "")
+    if not url:
+        return None
+    parsed = urlparse(url)
+    private_http = parsed.scheme == "http" and parsed.hostname in {"127.0.0.1", "localhost", "source-broker"}
+    if (not private_http and parsed.scheme != "https") or not parsed.hostname or parsed.username or parsed.query or parsed.fragment or len(token) < 32:
+        raise ValueError("The host source service needs a trusted endpoint and credential")
+    return url, token
+
+
+def connected():
+    return bool(host_config() or config())
+
+
+async def host_request(operation, **payload):
+    url, token = host_config()
+    async with httpx.AsyncClient(timeout=30, follow_redirects=False) as client:
+        async with client.stream("POST", url, json={"operation": operation, **payload},
+                                 headers={"Authorization": "Bearer " + token}) as response:
+            response.raise_for_status()
+            raw = bytearray()
+            async for chunk in response.aiter_bytes():
+                if len(raw) + len(chunk) > 512 * 1024:
+                    raise ValueError("Source service response exceeds the retrieval limit")
+                raw.extend(chunk)
+    import json
+    return json.loads(raw)
+
+
+async def relevant(query, sources=()):
+    if host_config():
+        return await host_request("search", query=query[:600], sources=list(sources)[:10])
+    return await pages(query[:200])
+
+
 def config(prefix="LIBRARY"):
     base, token = (
         os.environ.get(prefix + "_API_URL", "").rstrip("/"),
@@ -21,6 +58,8 @@ def config(prefix="LIBRARY"):
 
 
 async def pages(query):
+    if host_config():
+        return await host_request("search", query=query[:600])
     cfg = config()
     if cfg is None:
         return {"connected": False, "items": []}
@@ -58,6 +97,8 @@ async def pages(query):
 
 
 async def save_reference(source):
+    if host_config():
+        return await host_request("save", source=source)
     cfg = config()
     if cfg is None:
         raise ValueError("Connect a private library before saving references")
@@ -91,6 +132,8 @@ async def sync_notebook(snapshot, report):
     """Publish current project state into the private library, without learner records."""
     import json
 
+    if host_config():
+        return await host_request("notebook", snapshot=snapshot, report=report)
     cfg = config()
     if cfg is None:
         return {"connected": False}
@@ -131,6 +174,8 @@ async def sync_notebook(snapshot, report):
 
 async def configure_provider(key, model):
     """Explicit owner-requested credential sharing with configured private workspaces."""
+    if host_config():
+        return await host_request("provider", key=key, model=model)
     updated, failed = 0, 0
     async with httpx.AsyncClient(timeout=20, follow_redirects=False) as client:
         for cfg in [config(), config("LIBRARY_SECONDARY")]:
@@ -169,24 +214,41 @@ async def configure_provider(key, model):
 
 
 def select_passage(text, query, limit=1200):
-    """Select one lexical window; extraction/ranking is not source verification."""
-    stop = {"what", "when", "where", "which", "that", "this", "with", "from", "have", "explain", "please", "about"}
+    """Select bounded explanatory text, excluding index and contents fragments."""
+    stop = {"what", "when", "where", "which", "that", "this", "with", "from", "have", "explain", "please", "about", "before", "there", "every", "entire", "introduction", "would", "could", "their", "these", "those", "then"}
     terms = list(dict.fromkeys(
         word.casefold().rstrip("s") for word in re.findall(r"\w{4,}", query)
         if word.casefold() not in stop
-    ))[:12]
-    best, score = "", 0
-    for start in range(0, len(text), 800):
+    ))[:20]
+    best, best_score = "", 0
+    for start in range(0, len(text), 700):
         window = text[start:start + limit]
+        if start and text[start - 1].isalnum():
+            window = window.partition(" ")[2]
+        lines = [line.strip() for line in window.splitlines() if line.strip()]
+        index_rows = sum(bool(re.search(r"[,\u2026.]\s*\d+(?:\s*[,–-]\s*\d+)*\s*$", line)) for line in lines)
+        if len(lines) >= 6 and index_rows / len(lines) > .35:
+            continue
+        if window.count("...") >= 5:
+            continue
         folded = window.casefold()
-        hits = sum(term in folded for term in terms)
-        if hits > score:
-            best, score = window, hits
-    return best
-
+        score = sum(min(folded.count(term), 3) for term in terms)
+        # Dense prose is more useful than a list of page references or isolated labels.
+        if len(re.findall(r"[.!?]\s", window)) < 2:
+            score *= .5
+        if score > best_score:
+            best, best_score = window, score
+    return best.rsplit(" ", 1)[0].strip() if best else ""
 
 async def passages(sources, query):
     """Read at most two bounded private excerpts; never persist the corpus here."""
+    if host_config():
+        data = await host_request("read", sources=sources[:10], query=query[:600])
+        # Treat the host response as data. Preserve the same reading budget as standalone retrieval.
+        return [{"source_id": str(item["source_id"])[:100], "title": str(item["title"])[:300],
+                 "url": str(item.get("url", ""))[:2000], "text": str(item["text"])[:1200],
+                 "review_status": "Unreviewed automatic extraction"}
+                for item in data.get("items", [])[:2] if item.get("text")]
     primary = config()
     if primary is None:
         return []

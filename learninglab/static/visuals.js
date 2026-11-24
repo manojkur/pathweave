@@ -12,7 +12,7 @@ const base = () =>
     "aria-label":
       "Interactive mathematical illustration. The explanation below describes its meaning.",
   });
-function line(root, x1, y1, x2, y2, color = "#52776b", width = 1) {
+function line(root, x1, y1, x2, y2, color = "#526070", width = 1) {
   root.append(
     svg("line", { x1, y1, x2, y2, stroke: color, "stroke-width": width }),
   );
@@ -20,7 +20,7 @@ function line(root, x1, y1, x2, y2, color = "#52776b", width = 1) {
 function text(root, x, y, value) {
   root.append(svg("text", { x, y, class: "svg-text" }, value));
 }
-function path(root, points, color = "#b5d598", width = 3) {
+function path(root, points, color = "#b5c8e4", width = 3) {
   root.append(
     svg("path", {
       d: points.map((p, i) => (i ? "L" : "M") + p.join(",")).join(" "),
@@ -32,10 +32,10 @@ function path(root, points, color = "#b5d598", width = 3) {
   );
 }
 function axes(root) {
-  for (let x = 60; x < 580; x += 50) line(root, x, 25, x, 315, "#23474a");
-  for (let y = 40; y < 330; y += 40) line(root, 45, y, 580, y, "#23474a");
-  line(root, 55, 285, 580, 285, "#65877b");
-  line(root, 80, 25, 80, 320, "#65877b");
+  for (let x = 60; x < 580; x += 50) line(root, x, 25, x, 315, "#252c35");
+  for (let y = 40; y < 330; y += 40) line(root, 45, y, 580, y, "#252c35");
+  line(root, 55, 285, 580, 285, "#738296");
+  line(root, 80, 25, 80, 320, "#738296");
 }
 function control(panel, label, min, max, step, value, update) {
   const box = document.createElement("div"),
@@ -59,7 +59,7 @@ function control(panel, label, min, max, step, value, update) {
 const narratives = {
   ode: [
     "Start with a local rule: at every point, the slope is k times the current amount. The short strokes show those local slopes.",
-    "Change k or the starting amount. The green curve follows the rule continuously; the gold steps follow a numerical approximation.",
+    "Change k or the starting amount. The blue curve follows the rule continuously; the gold steps follow a numerical approximation.",
     "The exact solution is x(t)=x₀ exp(kt). Differentiation checks the rule. Multiplying any solution by exp(−kt) proves uniqueness.",
     "What changes for a vector state x′=Ax? Invariant directions reduce the motion to exponential modes. Existence and uniqueness need assumptions for nonlinear rules.",
   ],
@@ -76,8 +76,8 @@ const narratives = {
     "Try a new sequence, or change the surrounding number system. Convergence depends on both the rule and the space.",
   ],
   derivative: [
-    "The green curve is x². Two nearby points determine a gold secant line.",
-    "Move the point or reduce the gap h. Watch the secant slope approach the slope of the mint tangent.",
+    "The blue curve is x². Two nearby points determine a gold secant line.",
+    "Move the point or reduce the gap h. Watch the secant slope approach the slope of the pale tangent.",
     "The quotient ((a+h)²−a²)/h equals 2a+h for h≠0, hence its limit is 2a.",
     "For a corner, the two one-sided slopes disagree. In higher dimensions, the tangent approximation becomes a linear transformation.",
   ],
@@ -412,7 +412,7 @@ export function heroGraphic() {
       svg("path", {
         d,
         fill: "none",
-        stroke: ["#6c956e", "#a4b28a", "#c4b085", "#456f61", "#8faba0"][i],
+        stroke: ["#dddddd", "#7e8999", "#c2c2c2", "#4b515b", "#8c9098"][i],
         "stroke-width": i === 0 ? 3 : 1.5,
       }),
     );
@@ -425,10 +425,9 @@ export function heroGraphic() {
     [183, 141, 4],
   ]) {
     root.append(
-      svg("circle", { cx: x, cy: y, r: r + 5, fill: "#e9efe5" }),
-      svg("circle", { cx: x, cy: y, r, fill: "#6f956b" }),
+      svg("circle", { cx: x, cy: y, r: r + 5, fill: "#dedede" }),
+      svg("circle", { cx: x, cy: y, r, fill: "#626b7a" }),
     );
   }
-  text(root, 170, 228, "Different paths. Deeper connections.");
   return root;
 }

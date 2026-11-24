@@ -48,6 +48,8 @@ HOST_URL=https://your-host.example/labs/learning
 
 Use the same data volume for web and worker. Do not expose the service's backend port publicly in a hosted deployment. Application cookies are HTTP-only, same-site, revocable, and secure on HTTPS. The sole owner identity is configured externally; no host-specific identity or domain is in the code.
 
+Hosts that protect the entire workspace can return an `X-Login-URL` response header selecting a neutral sign-in page. Only a same-origin target without embedded credentials is accepted. On authentication failure or sign-out, the browser clears the workspace and navigates to that page; standalone installations retain the built-in sign-in screen. Back/forward restoration rechecks the session before rendering. The host must enforce access at its proxy for every private page, API, and asset; client redirects alone are insufficient. If the host shares its session across routes, it must explicitly manage the root cookie path and revoke that shared session on logout.
+
 ## Optional library contract
 
 The external library owns all files, extraction, full text, private reading notes, and rights metadata. Configure `LIBRARY_API_URL`, `LIBRARY_API_TOKEN`, `LIBRARY_WEB_URL`, and `LIBRARY_LABEL` only in private runtime settings.

@@ -1,7 +1,9 @@
 import { mountScene, heroGraphic } from "./visuals.js";
+import { hostSignInTarget } from "./auth-redirect.mjs";
 const app = document.querySelector("#app");
 const base = location.pathname.replace(/\/(login)?$/, "");
 const apiRoot = base + "/api";
+let hostSignIn = "";
 let csrf = "",
   state = null,
   page = [
@@ -52,6 +54,8 @@ async function api(path, options = {}) {
       ...options.headers,
     },
   });
+  const target = hostSignInTarget(res.headers.get("X-Login-URL"), location.origin);
+  if (target) hostSignIn = target;
   const data = await res.json();
   if (!res.ok) {
     if (res.status === 401 && path != "/auth/login") {
@@ -69,6 +73,14 @@ async function refresh() {
   state = await api("/state");
 }
 function loginView(error = "") {
+  if (hostSignIn) {
+    state = null;
+    chatTurns = [];
+    task = null;
+    app.replaceChildren();
+    location.replace(hostSignIn);
+    return;
+  }
   app.innerHTML = `<div class="login-wrap"><section class="login-story"><div class="brand">${mark}Pathweave</div><div class="eyebrow">A connected way to learn</div><h1>Build understanding.<br>One connection<br>at a time.</h1><p>A place to explore ideas, find your next step, and make room for the questions that lead somewhere new.</p><div id="login-art" class="hero-art"></div></section><main id="main" class="login-panel"><form class="login-form" id="login-form"><div class="eyebrow">Your learning workspace</div><h2>Welcome back.</h2><p>Sign in to continue your path.</p><label for="username">Username</label><input id="username" name="username" autocomplete="username" required maxlength="100"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required maxlength="256"><button class="primary" type="submit">Sign in <span aria-hidden="true">→</span></button><div class="login-error" role="alert">${e(error)}</div><p class="footnote">This workspace is currently open to its owner. Pathweave’s code and research methods are public.</p><a class="small" href="https://github.com/manojkur/pathweave" target="_blank" rel="noopener">Explore the open project ↗</a></form></main></div>`;
   document.querySelector("#login-art").append(heroGraphic());
   document.querySelector("#login-form").onsubmit = async (ev) => {
@@ -726,12 +738,19 @@ function wire() {
       }),
   );
 }
-try {
-  const s = await api("/auth/session");
-  csrf = s.csrf;
-  await refresh();
-  state.username = s.username;
-  render();
-} catch {
-  loginView();
+async function openWorkspace() {
+  try {
+    const s = await api("/auth/session");
+    csrf = s.csrf;
+    await refresh();
+    state.username = s.username;
+    render();
+  } catch {
+    loginView();
+  }
 }
+window.addEventListener("pagehide", () => app.replaceChildren());
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) void openWorkspace();
+});
+await openWorkspace();

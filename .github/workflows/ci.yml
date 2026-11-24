@@ -15,6 +15,7 @@ jobs:
       - run: uv run pytest -q
       - run: node --check learninglab/static/app.js
       - run: node --check learninglab/static/visuals.js
+      - run: node --test tests/*.test.mjs
       - name: Public source boundary
         run: |
           test -z "$(git ls-files '*.pdf' '*.sqlite*' '.env' 'runtime/*')"

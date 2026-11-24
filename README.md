@@ -64,6 +64,7 @@ uv run ruff check learninglab scripts tests
 uv run pytest -q
 node --check learninglab/static/app.js
 node --check learninglab/static/visuals.js
+node --test tests/*.test.mjs
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Code is MIT-licensed; original authored educational text and source-card annotations are CC BY 4.0. External works retain their own terms. The project is independent and is not affiliated with referenced authors, institutions, or animation creators.
